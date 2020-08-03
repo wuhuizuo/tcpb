@@ -42,7 +42,7 @@ func relayHandler(messageType int, upgrader *websocket.Upgrader) httpHandlerFunc
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: %s <tcpTargetAddress>\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "Usage: %s [options], options list:\n", os.Args[0])
 	flag.PrintDefaults()
 }
 
