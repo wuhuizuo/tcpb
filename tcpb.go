@@ -2,8 +2,9 @@ package tcpb
 
 import (
 	"io"
-	"log"
 	"net"
+	"net/http"
+	"net/url"
 
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
@@ -11,65 +12,74 @@ import (
 
 // Bridge implemnt data flow tunnel between tcp client/server with websocket.
 type Bridge struct {
-	PackType int
+	WSProxyGetter func(*http.Request) (*url.URL, error)
 }
 
 // TCP2WS tcp client -> websocket tunnel
 func (b *Bridge) TCP2WS(src net.Conn, wsURL string) error {
 	defer src.Close()
 
-	wsCon, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	wsCon.EnableWriteCompression(true)
-	wsCon.UnderlyingConn()
+	wsDialer := &websocket.Dialer{
+		Proxy:            b.WSProxyGetter,
+		HandshakeTimeout: websocket.DefaultDialer.HandshakeTimeout,
+	}
+
+	wsCon, _, err := wsDialer.Dial(wsURL, nil)
 	if err != nil {
 		return errors.Wrapf(err, "dial ws %s failed", wsURL)
 	}
+
 	defer wsCon.Close()
 
-	return Delive(src, wsCon)
+	return Delivery(src, wsCon)
 }
 
 // WS2TCP websocket tunnel -> tcp server
 func (b *Bridge) WS2TCP(src *websocket.Conn, tcpAddress string) error {
 	defer src.Close()
 
-	tcpCon, err := net.Dial("tcp", tcpAddress)	
+	tcpCon, err := net.Dial("tcp", tcpAddress)
 	if err != nil {
 		return errors.Wrapf(err, "dial tcp %s failed", tcpAddress)
 	}
 	defer tcpCon.Close()
 
-	return Delive(tcpCon, src)
+	return Delivery(tcpCon, src)
 }
 
-// Delive tcp msg with tunnel
-func Delive(con net.Conn, wsCon *websocket.Conn) error {
-	// readWSType, wsReader, err := wsCon.NextReader()
-	// if err != nil {
-	// 	return errors.Wrap(err, "get websocket reader failed")
-	// }
-	// if readWSType != wsPackType {
-	// 	return errors.Wrapf(err, "websocket message type is %d not eq %d", readWSType, wsPackType)
-	// }
-
-	// wsWriter, err := wsCon.NextWriter(wsPackType)
-	// if err != nil {
-	// 	return errors.Wrap(err, "get websocket writer failed")
-	// }
-
-	doneCh := make(chan bool)
-	go copyWorker(con, wsCon.UnderlyingConn(), doneCh)
-	go copyWorker(wsCon.UnderlyingConn(), con, doneCh)
-	<-doneCh
-	<-doneCh
-
-	return nil
+// Delivery tcp msg with tunnel
+func Delivery(con net.Conn, wsCon *websocket.Conn) error {
+	return syncCon(con, wsCon.UnderlyingConn())
 }
 
-func copyWorker(dst io.Writer, src io.Reader, done chan<- bool) {
-	if _, err := io.Copy(dst, src); err != nil {
-		log.Println("[ERROR] ", err)
+func syncCon(conA, conB net.Conn) error {
+	conLen := 2
+	doneCh := make(chan bool, conLen)
+	errCh := make(chan error, conLen)
+
+	go copyWorker(conA, conB, doneCh, errCh)
+	go copyWorker(conB, conA, doneCh, errCh)
+
+	var err error
+	for i := 0; i < conLen; i++ {
+		<-doneCh
+
+		if err == nil {
+			err = <-errCh
+		} else {
+			<-errCh
+		}
 	}
 
+	return err
+}
+
+func copyWorker(dst io.Writer, src io.Reader, done chan<- bool, err chan<- error) {
+	_, ioErr := io.Copy(dst, src)
 	done <- true
+
+	if ioErr != nil {
+		ioErr = errors.Wrap(ioErr, "io copy error between connections")
+	}
+	err <- ioErr
 }

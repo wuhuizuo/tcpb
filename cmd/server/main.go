@@ -21,6 +21,7 @@ func relayHandler(messageType int, upgrader *websocket.Upgrader) httpHandlerFunc
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		tcpAddress := strings.TrimLeft(r.URL.Path, "/")
+		log.Println("[INFO ] receive tunnel request for tcp: ", tcpAddress)
 
 		if tcpAddress == "" {
 			log.Println("[ERROR] ", "url path is not tcp address")
@@ -29,13 +30,13 @@ func relayHandler(messageType int, upgrader *websocket.Upgrader) httpHandlerFunc
 
 		wsCon, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.Print("upgrade:", err)
+			log.Printf("[ERROR] %+v\n", err)
 			return
 		}
 
-		bridge := tcpb.Bridge{PackType: messageType}
+		bridge := tcpb.Bridge{}
 		if err := bridge.WS2TCP(wsCon, tcpAddress); err != nil {
-			log.Println("[ERROR] ", err)
+			log.Printf("[ERROR] %+v\n", err)
 		}
 	}
 }
@@ -65,17 +66,22 @@ func main() {
 	http.HandleFunc("/", relayHandler(messageType, nil))
 
 	serveAddr := fmt.Sprintf("%s:%d", host, port)
-	log.Println("[INFO] message type:", messageType)
-	log.Printf("[INFO] Listening on %s:%d\n", host, port)
+	log.Println("[INFO ] message type:", messageType)
 
 	var err error
 	if certFile == "" || keyFile == "" {
+		log.Printf("[INFO ] Listening on ws://%s\n", serveAddr)
 		err = http.ListenAndServe(serveAddr, nil)
 	} else {
+		log.Printf("[INFO ] Listening on wss://%s\n", serveAddr)
 		err = http.ListenAndServeTLS(serveAddr, certFile, keyFile, nil)
 	}
 
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("[ERROR] %+v\n", err)
 	}
+}
+
+func init() {
+	log.SetOutput(os.Stdout)
 }
