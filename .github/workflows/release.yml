@@ -22,7 +22,7 @@ jobs:
           go build -o tcpbc.${{ matrix.GOOS }}.${{ matrix.GOARCH }} -v ./cmd/client
           go build -o tcpbs.${{ matrix.GOOS }}.${{ matrix.GOARCH }} -v ./cmd/server
       - name: Create Release
-        if: matrix.GOOS == 'linux' && matrix.GOARCH == "amd64"
+        if: matrix.GOOS == 'linux' && matrix.GOARCH == 'amd64'
         id: create_release
         uses: actions/create-release@v1
         env:
