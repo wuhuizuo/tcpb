@@ -12,16 +12,20 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        GOARCH: [amd64, arm64]
-        GOOS: [darwin, linux]
-        exclude:
-          - os: ubuntu-latest
-            GOOS: darwin
-          - os: macos-latest
-            GOOS: linux
-          - os: macos-latest
-            GOARCH: arm64           
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+        - os: ubuntu-latest
+          GOOS: linux
+          GOARCH: amd64
+        - os: ubuntu-latest
+          GOOS: linux
+          GOARCH: arm64
+        - os: macos-latest
+          GOOS: darwin
+          GOARCH: amd64
+        - os: windows-latest
+          GOOS: windows
+          GOARCH: amd64          
     steps:
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
