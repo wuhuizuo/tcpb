@@ -24,7 +24,8 @@ jobs:
           draft: false
           prerelease: false  
   build:
-    name: Release a new version
+    needs: release
+    name: build release binnary
     runs-on: ubuntu-latest
     strategy:
       matrix:
