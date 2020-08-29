@@ -10,7 +10,6 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == matrix.event-name }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
