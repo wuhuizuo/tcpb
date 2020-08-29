@@ -38,7 +38,9 @@ jobs:
           - os: ubuntu-latest
             GOOS: darwin
           - os: macos-latest
-            GOOS: linux     
+            GOOS: linux
+          - os: macos-latest
+            GOARCH: arm64              
     steps:
       - name: Checkout code
         uses: actions/checkout@v2

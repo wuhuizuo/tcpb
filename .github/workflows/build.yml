@@ -19,7 +19,9 @@ jobs:
           - os: ubuntu-latest
             GOOS: darwin
           - os: macos-latest
-            GOOS: linux            
+            GOOS: linux
+          - os: macos-latest
+            GOARCH: arm64           
     steps:
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
