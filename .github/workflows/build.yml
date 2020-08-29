@@ -22,6 +22,6 @@ jobs:
     - name: Test
       run: go test -v .
     - name: Build Client
-      run: go build -o tcpbc-${GOOS}-${GOARCH} -v ./cmd/client
+      run: echo tcpbc-${GOOS}-${GOARCH}; go build -o tcpbc-${GOOS}-${GOARCH} -v ./cmd/client
     - name: Build Server
       run: go build -o tcpbs-${GOOS}-${GOARCH} -v ./cmd/server
