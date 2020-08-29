@@ -1,0 +1,55 @@
+on:
+  push:
+    # Sequence of patterns matched against refs/tags
+    tags:
+    - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+
+name: Release a new version
+
+jobs:
+  build:
+    name: Release a new version
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        GOOS: [darwin, linux]
+        GOARCH: [amd64, arm64]    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Build
+        run: |
+          go build -o tcpbc.${{ matrix.GOOS }}.${{ matrix.GOARCH }} -v ./cmd/client
+          go build -o tcpbs.${{ matrix.GOOS }}.${{ matrix.GOARCH }} -v ./cmd/server
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+      - name: Upload Release Asset tcpbc
+        id: upload-release-asset-tcpbc.${{ matrix.GOOS }}.${{ matrix.GOARCH }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./tcpbc.${{ matrix.GOOS }}.${{ matrix.GOARCH }}
+          asset_name: tcpbc.${{ matrix.GOOS }}.${{ matrix.GOARCH }}
+          asset_label: ${{ matrix.GOOS }} ${{ matrix.GOARCH }} client execute binnay
+          asset_content_type: application/octet-stream
+      - name: Upload Release Asset tcpbs
+        id: upload-release-asset-tcpbs.${{ matrix.GOOS }}.${{ matrix.GOARCH }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./tcpbs.${{ matrix.GOOS }}.${{ matrix.GOARCH }}
+          asset_name: tcpbs.${{ matrix.GOOS }}.${{ matrix.GOARCH }}
+          asset_label: ${{ matrix.GOOS }} ${{ matrix.GOARCH }} server daemon binnay
+          asset_content_type: application/octet-stream          
