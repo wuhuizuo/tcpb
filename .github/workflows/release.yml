@@ -32,7 +32,7 @@ jobs:
           draft: false
           prerelease: false
       - name: Upload Release Asset tcpbc
-        id: upload-release-asset-tcpbc.${{ matrix.GOOS }}.${{ matrix.GOARCH }}
+        id: upload-release-asset-tcpbc
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -43,7 +43,7 @@ jobs:
           asset_label: ${{ matrix.GOOS }} ${{ matrix.GOARCH }} client execute binnay
           asset_content_type: application/octet-stream
       - name: Upload Release Asset tcpbs
-        id: upload-release-asset-tcpbs.${{ matrix.GOOS }}.${{ matrix.GOARCH }}
+        id: upload-release-asset-tcpbs
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
