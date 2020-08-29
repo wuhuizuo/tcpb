@@ -49,7 +49,6 @@ jobs:
           upload_url: ${{ needs.release.outputs.upload_url }}
           asset_path: ./tcpbc.${{ matrix.GOOS }}.${{ matrix.GOARCH }}
           asset_name: tcpbc.${{ matrix.GOOS }}.${{ matrix.GOARCH }}
-          asset_label: ${{ matrix.GOOS }} ${{ matrix.GOARCH }} client execute binnay
           asset_content_type: application/octet-stream
       - name: Upload Release Asset tcpbs
         id: upload-release-asset-tcpbs
@@ -60,5 +59,4 @@ jobs:
           upload_url: ${{ needs.release.outputs.upload_url }}
           asset_path: ./tcpbs.${{ matrix.GOOS }}.${{ matrix.GOARCH }}
           asset_name: tcpbs.${{ matrix.GOOS }}.${{ matrix.GOARCH }}
-          asset_label: ${{ matrix.GOOS }} ${{ matrix.GOARCH }} server daemon binnay
           asset_content_type: application/octet-stream          
