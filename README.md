@@ -10,13 +10,13 @@ TCP Bridge under websocket protocol.
 run in tunnel server:
 
 ```bash
-./s -p 4223
+./server -port 4223
 ```
 
 run in user client side:
 
 ```bash
-./c -u ws://{tunnel server ip}:4223/{remote_tcp_ip}:{remote_tcp_port} -p {local_port}
+./client -tunnel ws://{tunnel server ip}:4223/{remote_tcp_ip}:{remote_tcp_port} -port {local_port}
 ```
 
 
