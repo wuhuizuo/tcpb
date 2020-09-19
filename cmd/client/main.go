@@ -42,7 +42,6 @@ func main() {
 	var proxyURL string
 	var certFile string
 	var keyFile string
-	var messageType int
 
 	flag.StringVar(&host, "host", "", "The ip to bind on, default all")
 	flag.UintVar(&port, "port", 0, "The port to listen on, default automatically chosen.")
@@ -50,12 +49,10 @@ func main() {
 	flag.StringVar(&proxyURL, "proxy", "", "proxy url, format: http[s]://host:port/path, default use system proxy.")
 	flag.StringVar(&certFile, "tlscert", "", "TLS cert file path.")
 	flag.StringVar(&keyFile, "tlskey", "", "TLS key file path.")
-	flag.IntVar(&messageType, "msgtype", 1, "msg frame type, 1:text, 2: binary.")
 	flag.Usage = usage
 	flag.Parse()
 
 	serveAddr := fmt.Sprintf("%s:%d", host, port)
-	log.Println("[INFO ] message type:", messageType)
 	l, err := net.Listen("tcp", serveAddr)
 	if err != nil {
 		log.Fatal(err)

@@ -54,8 +54,7 @@ func main() {
 	var keyFile string
 
 	flag.StringVar(&host, "host", "", "The ip to bind on, default all")
-	flag.UintVar(&port, "p", 4223, "The port to listen on")
-	flag.UintVar(&port, "port", 4223, "The port to listen on")
+	flag.UintVar(&port, "port", 8080, "The port to listen on")
 	flag.StringVar(&certFile, "tlscert", "", "TLS cert file path")
 	flag.StringVar(&keyFile, "tlskey", "", "TLS key file path")
 	flag.Usage = usage
