@@ -2,9 +2,8 @@
 FROM golang:latest as go
 
 COPY . /workspace
-RUN cd /workspace
-RUN go build -o tcpbs ./cmd/server
-RUN go build -o tcpbc ./cmd/client
+RUN cd /workspace && go build -o tcpbs ./cmd/server
+RUN cd /workspace && go build -o tcpbc ./cmd/client
 
 # containter for run
 FROM debian:buster-slim
