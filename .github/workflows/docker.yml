@@ -26,9 +26,10 @@ jobs:
         run: echo ${{ steps.buildx.outputs.platforms }}          
       - name: Prepare
         id: prepare
+        #  DOCKER_PLATFORMS=linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/386,linux/ppc64le,linux/s390x
         run: |
           DOCKER_IMAGE=wuhuizuo/tcpb
-          DOCKER_PLATFORMS=linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/386,linux/ppc64le,linux/s390x
+          DOCKER_PLATFORMS=linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/386,linux/ppc64le
           VERSION=edge
 
           if [[ $GITHUB_REF == refs/tags/* ]]; then
