@@ -11,6 +11,9 @@ run in tunnel server:
 
 ```bash
 ./server -port 4223
+
+# using docker
+docker run wuhuizuo/tcpb -v <host_port>:80
 ```
 
 run in user client side:
@@ -18,6 +21,7 @@ run in user client side:
 ```bash
 ./client -tunnel ws://{tunnel server ip}:4223/{remote_tcp_ip}:{remote_tcp_port} -port {local_port}
 ```
+
 
 
 ## test
