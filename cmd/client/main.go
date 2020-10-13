@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -8,7 +9,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
+	"time"
 
+	"github.com/pkg/errors"
 	"github.com/wuhuizuo/tcpb"
 )
 
@@ -19,21 +23,6 @@ const (
 )
 
 type proxyGetter func(*http.Request) (*url.URL, error)
-
-func handleConnection(c net.Conn, wsURL string, wsProxyGetter proxyGetter) {
-	defer c.Close()
-
-	bridge := tcpb.Bridge{WSProxyGetter: wsProxyGetter}
-	err := bridge.TCP2WS(c, wsURL)
-	if err != nil {
-		log.Printf("[ERROR] %+v\n", err)
-	}
-}
-
-func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: %s [options], options list:\n", os.Args[0])
-	flag.PrintDefaults()
-}
 
 func main() {
 	var host string
@@ -52,23 +41,76 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		oscall := <-c
+		log.Printf("[WARN ] system call:%+v", oscall)
+		cancel()
+	}()
+
 	serveAddr := fmt.Sprintf("%s:%d", host, port)
+
+	if err := serve(ctx, serveAddr, tunnelURL, proxyURL); err != nil {
+		log.Printf("[ERROR] failed to serve:+%v\n", err)
+		os.Exit(1)
+	}
+}
+
+
+func serve(ctx context.Context, serveAddr, tunnelURL, proxyURL string) error {
 	l, err := net.Listen("tcp", serveAddr)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	defer l.Close()
-	log.Printf("[INFO ] TCP tunneled on %s [%s]\n", l.Addr().String(), l.Addr().Network())
 
-	for {
-		c, err := l.Accept()
-		if err != nil {
-			log.Fatalf("[ERROR] accept connection failed: %+v\n", err)
+	log.Printf("[INFO ] TCP tunnel started on %s [%s]\n", l.Addr().String(), l.Addr().Network())
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				log.Fatalf("[ERROR] accept connection failed: %+v\n", err)
+			}
+			log.Printf("[INFO ] accepted connection %s -> %s\n", c.RemoteAddr(), c.LocalAddr())
+
+			go handleConnection(c, tunnelURL, getWSProxy(proxyURL))
 		}
-		log.Printf("[INFO ] accepted connection %s -> %s\n", c.RemoteAddr(), c.LocalAddr())
+	}()
 
-		go handleConnection(c, tunnelURL, getWSProxy(proxyURL))
+	<-ctx.Done()
+	log.Printf("[INFO ] TCP tunnel stopping on %s [%s]\n", l.Addr().String(), l.Addr().Network())
+
+	_, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer func() {
+		cancel()
+	}()
+
+	if err = l.Close(); err != nil {
+		return errors.Wrap(err, "server Shutdown Failed")
 	}
+
+	log.Println("[INFO ] TCP tunnel stopped")
+	return nil
+}
+
+func handleConnection(c net.Conn, wsURL string, wsProxyGetter proxyGetter) {
+	defer func() {
+		log.Println("[INFO ] close client connection")
+		c.Close()
+	}()
+
+	bridge := tcpb.Bridge{WSProxyGetter: wsProxyGetter, HeartInterval: 30 * time.Second}
+	err := bridge.TCP2WS(c, wsURL)
+	if err != nil {
+		log.Printf("[ERROR] %+v\n", err)
+	}		
+}
+
+func usage() {
+	fmt.Fprintf(os.Stderr, "Usage: %s [options], options list:\n", os.Args[0])
+	flag.PrintDefaults()
 }
 
 func getWSProxy(proxy string) proxyGetter {

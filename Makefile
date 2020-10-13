@@ -1,5 +1,7 @@
 TARGETS = tcpbc tcpbs
 
+all: clean client server
+
 client:
 	go build -o tcpbc ./cmd/client
 
@@ -9,4 +11,3 @@ server:
 clean: 
 	rm -rf $(TARGETS)
 	
-all: clean client server

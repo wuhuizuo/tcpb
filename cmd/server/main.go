@@ -34,6 +34,10 @@ func relayHandler(upgrader *websocket.Upgrader) httpHandlerFunc {
 			log.Printf("[ERROR] %+v\n", err)
 			return
 		}
+		defer func() {
+			log.Println("[INFO ] close websocket connection")
+			wsCon.Close()
+		}()
 
 		bridge := tcpb.Bridge{}
 		if err := bridge.WS2TCP(wsCon, tcpAddress); err != nil {
