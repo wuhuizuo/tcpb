@@ -72,9 +72,9 @@ func syncCon(ws *websocket.Conn, tcp net.Conn) (err error) {
 
 	select {
 	case err = <-errWS2tcp:
-		log.Printf("disconnected: ws://%s -> tcp://%s\n", ws.LocalAddr(), tcp.RemoteAddr())
+		log.Printf("[INFO ] disconnected: ws://%s -> tcp://%s\n", ws.LocalAddr(), tcp.RemoteAddr())
 	case err = <-errTCP2ws:
-		log.Printf("disconnected: tcp://%s -> ws://%s\n", tcp.LocalAddr(), ws.RemoteAddr())
+		log.Printf("[INFO ] disconnected: tcp://%s -> ws://%s\n", tcp.LocalAddr(), ws.RemoteAddr())
 	}
 
 	return err
