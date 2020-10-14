@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -13,7 +14,7 @@ import (
 )
 
 const (
-	bufferLen    = 4196
+	bufferLen = 4196
 )
 
 // Bridge implemnt data flow tunnel between tcp client/server with websocket.
@@ -35,24 +36,7 @@ func (b *Bridge) TCP2WS(src net.Conn, wsURL string) error {
 	}
 	defer wsCon.Close()
 
-	// send ping package timely.
-	ticker := time.NewTicker(b.HeartInterval)
-	defer ticker.Stop()
-	go func() {
-		for {
-			select {
-			case <-ticker.C:				
-				_ = wsCon.WriteMessage(websocket.PingMessage, nil)				
-			}
-		}
-	}()
-
-	pongWait := 2 * b.HeartInterval
-	wsCon.SetPongHandler(func(string) error {
-		return wsCon.SetReadDeadline(time.Now().Add(pongWait))
-	})
-
-	return syncCon(wsCon, src)
+	return syncCon(wsCon, src, b.HeartInterval)
 }
 
 // WS2TCP websocket tunnel -> tcp server
@@ -63,12 +47,54 @@ func (b *Bridge) WS2TCP(src *websocket.Conn, tcpAddress string) error {
 	}
 	defer tcpCon.Close()
 
-	return syncCon(src, tcpCon)
+	return syncCon(src, tcpCon, 0)
 }
 
-func syncCon(ws *websocket.Conn, tcp net.Conn) (err error) {
-	errWS2tcp := ws2tcpWorker(ws, tcp)
-	errTCP2ws := tcp2wsWorker(tcp, ws)
+// wsHeartHandler send ping package timely to keep alive.
+func wsHeartHandler(wsCon *websocket.Conn,  interval time.Duration, wsWriteMux *sync.Mutex,) chan<- bool {
+	if interval <= 0 {
+		return nil
+	}
+
+	pongWait := 2 * interval
+	wsCon.SetPongHandler(func(string) error {
+		return wsCon.SetReadDeadline(time.Now().Add(pongWait))
+	})
+
+	ticker := time.NewTicker(interval)
+	stop := make(chan bool)
+	
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				wsWriteMux.Lock()
+				_ = wsCon.WriteMessage(websocket.PingMessage, nil)
+				wsWriteMux.Unlock()
+			case <- stop:
+				ticker.Stop()
+				break
+			}
+		}
+	}()
+
+	return stop
+}
+
+func syncCon(ws *websocket.Conn, tcp net.Conn, wsHeartInterval time.Duration) (err error) {
+	wsWriteMutex := new(sync.Mutex)
+	heartStop := wsHeartHandler(ws, wsHeartInterval, wsWriteMutex)
+	if heartStop != nil {
+		defer func() { heartStop <- true }()
+	}
+
+	errWS2tcp := ctrlWorker(func() error { return ws2tcp(ws, tcp) })
+	errTCP2ws := ctrlWorker(func() error { 
+		wsWriteMutex.Lock()
+		defer wsWriteMutex.Unlock()
+		
+		return tcp2ws(tcp, ws) 
+	})
 
 	select {
 	case err = <-errWS2tcp:
@@ -95,14 +121,6 @@ func ctrlWorker(loopFn func() error) <-chan error {
 	return errCh
 }
 
-func ws2tcpWorker(from *websocket.Conn, to net.Conn) <-chan error {
-	return ctrlWorker(func() error { return ws2tcp(from, to) })
-}
-
-func tcp2wsWorker(from net.Conn, to *websocket.Conn) <-chan error {
-	return ctrlWorker(func() error { return tcp2ws(from, to) })
-}
-
 func ws2tcp(from *websocket.Conn, to net.Conn) error {
 	_, buf, err := from.ReadMessage()
 	if err != nil {
@@ -125,12 +143,12 @@ func ws2tcp(from *websocket.Conn, to net.Conn) error {
 
 func tcp2ws(from net.Conn, to *websocket.Conn) error {
 	buf := make([]byte, bufferLen)
-	n, err := from.Read(buf)	
+	n, err := from.Read(buf)
 
 	switch err {
 	case nil, io.EOF:
 		if n == 0 {
-			return nil			
+			return nil
 		}
 		return to.WriteMessage(websocket.BinaryMessage, buf[:n])
 	default:
