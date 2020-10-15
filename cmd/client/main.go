@@ -22,28 +22,36 @@ const (
 	proxyEnv  = "env"
 )
 
-type proxyGetter func(*http.Request) (*url.URL, error)
+type (
+	proxyGetter func(*http.Request) (*url.URL, error)
+
+	clientTunnelCfg struct {
+		tunnelURL         string
+		proxyURL          string
+		heartbeatInterval uint
+	}
+
+	clientCfg struct {
+		clientTunnelCfg
+
+		listenHost string
+		listenPort uint
+	}
+)
 
 func main() {
-	var host string
-	var port uint
-	var tunnelURL string
-	var proxyURL string
-	var certFile string
-	var keyFile string
-
-	flag.StringVar(&host, "host", "", "The ip to bind on, default all")
-	flag.UintVar(&port, "port", 0, "The port to listen on, default automatically chosen.")
-	flag.StringVar(&tunnelURL, "tunnel", "", "tunnel url, format: ws://host:port")
-	flag.StringVar(&proxyURL, "proxy", "", "proxy url, format: http[s]://host:port/path, default use system proxy.")
-	flag.StringVar(&certFile, "tlscert", "", "TLS cert file path.")
-	flag.StringVar(&keyFile, "tlskey", "", "TLS key file path.")
+	var config clientCfg
+	flag.StringVar(&config.listenHost, "host", "", "The ip to bind on, default all")
+	flag.UintVar(&config.listenPort, "port", 0, "The port to listen on, default automatically chosen.")
+	flag.UintVar(&config.heartbeatInterval, "heartbeat", 30, "The interval(second) for heartbeat sending to tunnel server.")
+	flag.StringVar(&config.tunnelURL, "tunnel", "", "tunnel url, format: ws://host:port")
+	flag.StringVar(&config.proxyURL, "proxy", "", "proxy url, format: http[s]://host:port/path, default use system proxy.")
 	flag.Usage = usage
 	flag.Parse()
 
+	fmt.Printf("%+v", config)
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
-
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		oscall := <-c
@@ -51,16 +59,14 @@ func main() {
 		cancel()
 	}()
 
-	serveAddr := fmt.Sprintf("%s:%d", host, port)
-
-	if err := serve(ctx, serveAddr, tunnelURL, proxyURL); err != nil {
+	if err := serve(ctx, config); err != nil {
 		log.Printf("[ERROR] failed to serve:+%v\n", err)
 		os.Exit(1)
 	}
 }
 
-
-func serve(ctx context.Context, serveAddr, tunnelURL, proxyURL string) error {
+func serve(ctx context.Context, cfg clientCfg) error {
+	serveAddr := fmt.Sprintf("%s:%d", cfg.listenHost, cfg.listenPort)
 	l, err := net.Listen("tcp", serveAddr)
 	if err != nil {
 		return err
@@ -75,7 +81,7 @@ func serve(ctx context.Context, serveAddr, tunnelURL, proxyURL string) error {
 			}
 			log.Printf("[INFO ] accepted connection %s -> %s\n", c.RemoteAddr(), c.LocalAddr())
 
-			go handleConnection(c, tunnelURL, getWSProxy(proxyURL))
+			go handleConnection(c, cfg.clientTunnelCfg)
 		}
 	}()
 
@@ -95,17 +101,20 @@ func serve(ctx context.Context, serveAddr, tunnelURL, proxyURL string) error {
 	return nil
 }
 
-func handleConnection(c net.Conn, wsURL string, wsProxyGetter proxyGetter) {
+func handleConnection(c net.Conn, tunnelCfg clientTunnelCfg) {
 	defer func() {
 		log.Println("[INFO ] close client connection")
 		c.Close()
 	}()
 
-	bridge := tcpb.Bridge{WSProxyGetter: wsProxyGetter, HeartInterval: 30 * time.Second}
-	err := bridge.TCP2WS(c, wsURL)
+	bridge := tcpb.Bridge{
+		WSProxyGetter: getWSProxy(tunnelCfg.proxyURL),
+		HeartInterval: time.Duration(tunnelCfg.heartbeatInterval) * time.Second,
+	}
+	err := bridge.TCP2WS(c, tunnelCfg.tunnelURL)
 	if err != nil {
 		log.Printf("[ERROR] %+v\n", err)
-	}		
+	}
 }
 
 func usage() {

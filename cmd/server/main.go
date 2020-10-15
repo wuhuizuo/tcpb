@@ -12,7 +12,16 @@ import (
 	"github.com/wuhuizuo/tcpb"
 )
 
-type httpHandlerFunc func(w http.ResponseWriter, r *http.Request)
+type (
+	httpHandlerFunc func(w http.ResponseWriter, r *http.Request)
+
+	serverCfg struct {
+		host     string
+		port     uint
+		certFile string
+		keyFile  string
+	}
+)
 
 func relayHandler(upgrader *websocket.Upgrader) httpHandlerFunc {
 	if upgrader == nil {
@@ -52,34 +61,31 @@ func usage() {
 }
 
 func main() {
-	var host string
-	var port uint
-	var certFile string
-	var keyFile string
+	var cfg serverCfg
 
-	flag.StringVar(&host, "host", "", "The ip to bind on, default all")
-	flag.UintVar(&port, "port", 8080, "The port to listen on")
-	flag.StringVar(&certFile, "tlscert", "", "TLS cert file path")
-	flag.StringVar(&keyFile, "tlskey", "", "TLS key file path")
+	flag.StringVar(&cfg.host, "host", "", "The ip to bind on, default all")
+	flag.UintVar(&cfg.port, "port", 8080, "The port to listen on")
+	flag.StringVar(&cfg.certFile, "tlscert", "", "TLS cert file path")
+	flag.StringVar(&cfg.keyFile, "tlskey", "", "TLS key file path")
 	flag.Usage = usage
 	flag.Parse()
 
-	http.HandleFunc("/", relayHandler(nil))
-
-	serveAddr := fmt.Sprintf("%s:%d", host, port)
-
-	var err error
-	if certFile == "" || keyFile == "" {
-		log.Printf("[INFO ] Listening on ws://%s\n", serveAddr)
-		err = http.ListenAndServe(serveAddr, nil)
-	} else {
-		log.Printf("[INFO ] Listening on wss://%s\n", serveAddr)
-		err = http.ListenAndServeTLS(serveAddr, certFile, keyFile, nil)
-	}
-
-	if err != nil {
+	if err := serve(cfg); err != nil {
 		log.Fatalf("[ERROR] %+v\n", err)
 	}
+}
+
+func serve(cfg serverCfg) error {
+	http.HandleFunc("/", relayHandler(nil))
+	serveAddr := fmt.Sprintf("%s:%d", cfg.host, cfg.port)
+
+	if cfg.certFile == "" || cfg.keyFile == "" {
+		log.Printf("[INFO ] Listening on ws://%s\n", serveAddr)
+		return http.ListenAndServe(serveAddr, nil)
+	}
+
+	log.Printf("[INFO ] Listening on wss://%s\n", serveAddr)
+	return http.ListenAndServeTLS(serveAddr, cfg.certFile, cfg.keyFile, nil)
 }
 
 func init() {
