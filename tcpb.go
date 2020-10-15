@@ -68,10 +68,15 @@ func wsHeartHandler(wsCon *websocket.Conn, interval time.Duration, wsWriteMux *s
 		for {
 			select {
 			case <-ticker.C:
-				wsWriteMux.Lock()
-				_ = wsCon.WriteMessage(websocket.PingMessage, nil)
-				wsWriteMux.Unlock()
+				if wsWriteMux == nil {
+					_ = wsCon.WriteMessage(websocket.PingMessage, nil)
+				} else {
+					wsWriteMux.Lock()
+					_ = wsCon.WriteMessage(websocket.PingMessage, nil)
+					wsWriteMux.Unlock()
+				}
 			case <-stop:
+				log.Println("[INFO ] receive heart stop instruct")
 				ticker.Stop()
 				break
 			}
@@ -82,28 +87,22 @@ func wsHeartHandler(wsCon *websocket.Conn, interval time.Duration, wsWriteMux *s
 }
 
 func syncCon(ws *websocket.Conn, tcp net.Conn, wsHeartInterval time.Duration) (err error) {
-	wsWriteMutex := new(sync.Mutex)
-	heartStop := wsHeartHandler(ws, wsHeartInterval, wsWriteMutex)
+	var wsWriteMutex *sync.Mutex
 
-	tcp2wsLoopFn := func() error { return tcp2ws(tcp, ws) }
-	if heartStop != nil {
+	if wsHeartInterval > 0 {
+		wsWriteMutex = new(sync.Mutex)
+		heartStop := wsHeartHandler(ws, wsHeartInterval, wsWriteMutex)
 		defer func() { heartStop <- true }()
-
-		tcp2wsLoopFn = func() error {
-			wsWriteMutex.Lock()
-			defer wsWriteMutex.Unlock()
-			return tcp2ws(tcp, ws)
-		}
 	}
 
 	errWS2tcp := ctrlWorker(func() error { return ws2tcp(ws, tcp) })
-	errTCP2ws := ctrlWorker(tcp2wsLoopFn)
+	errTCP2ws := ctrlWorker(func() error { return tcp2ws(tcp, ws, wsWriteMutex) })
 
 	select {
 	case err = <-errWS2tcp:
-		log.Printf("[INFO ] disconnected: ws://%s -> tcp://%s\n", ws.LocalAddr(), tcp.RemoteAddr())
+		log.Printf("[INFO ] disconnected: ws://%s -> tcp://%s %+v\n", ws.LocalAddr(), tcp.RemoteAddr(), err)
 	case err = <-errTCP2ws:
-		log.Printf("[INFO ] disconnected: tcp://%s -> ws://%s\n", tcp.LocalAddr(), ws.RemoteAddr())
+		log.Printf("[INFO ] disconnected: tcp://%s -> ws://%s %+v\n", tcp.LocalAddr(), ws.RemoteAddr(), err)
 	}
 
 	return err
@@ -144,7 +143,7 @@ func ws2tcp(from *websocket.Conn, to net.Conn) error {
 	return nil
 }
 
-func tcp2ws(from net.Conn, to *websocket.Conn) error {
+func tcp2ws(from net.Conn, to *websocket.Conn, wsWriteMux *sync.Mutex) error {
 	buf := make([]byte, bufferLen)
 	n, err := from.Read(buf)
 
@@ -153,8 +152,16 @@ func tcp2ws(from net.Conn, to *websocket.Conn) error {
 		if n == 0 {
 			return nil
 		}
+
+		if wsWriteMux == nil {
+			return to.WriteMessage(websocket.BinaryMessage, buf[:n])
+		}
+
+		wsWriteMux.Lock()
+		defer wsWriteMux.Unlock()
 		return to.WriteMessage(websocket.BinaryMessage, buf[:n])
 	default:
+		log.Printf("[ERROR]] tcp2ws read err from tcp %s\n", err)
 		return err
 	}
 }
