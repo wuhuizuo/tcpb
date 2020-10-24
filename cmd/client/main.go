@@ -29,6 +29,7 @@ type (
 		tunnelURL         string
 		proxyURL          string
 		heartbeatInterval uint
+		userInfo          *tcpb.HTTPBasicUserInfo
 	}
 
 	clientCfg struct {
@@ -46,10 +47,14 @@ func main() {
 	flag.UintVar(&config.heartbeatInterval, "heartbeat", 30, "The interval(second) for heartbeat sending to tunnel server.")
 	flag.StringVar(&config.tunnelURL, "tunnel", "", "tunnel url, format: ws://host:port")
 	flag.StringVar(&config.proxyURL, "proxy", "", "proxy url, format: http[s]://host:port/path, default use system proxy.")
+
+	var userInfo tcpb.HTTPBasicUserInfo
+	flag.StringVar(&userInfo.Username, "user", "", "tunnel user name.")
+	flag.StringVar(&userInfo.Password, "password", "", "tunnel password.")
+
 	flag.Usage = usage
 	flag.Parse()
 
-	fmt.Printf("%+v", config)
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -58,6 +63,22 @@ func main() {
 		log.Printf("[WARN ] system call:%+v", oscall)
 		cancel()
 	}()
+
+	// detect user:password info in tunnelURL
+	u, err := url.ParseRequestURI(config.tunnelURL)
+	if err != nil {
+		log.Printf("[ERROR] invalid tunnel url: %s\n", config.tunnelURL)
+		os.Exit(2)
+	}
+	if u.User != nil {
+		userInfo.Username = u.User.Username()
+		userInfo.Password, _ = u.User.Password()
+	}
+
+	// set user info if username given
+	if userInfo.Username != "" {
+		config.userInfo = &userInfo
+	}
 
 	if err := serve(ctx, config); err != nil {
 		log.Printf("[ERROR] failed to serve:+%v\n", err)
@@ -111,7 +132,7 @@ func handleConnection(c net.Conn, tunnelCfg clientTunnelCfg) {
 		WSProxyGetter: getWSProxy(tunnelCfg.proxyURL),
 		HeartInterval: time.Duration(tunnelCfg.heartbeatInterval) * time.Second,
 	}
-	err := bridge.TCP2WS(c, tunnelCfg.tunnelURL)
+	err := bridge.TCP2WS(c, tunnelCfg.tunnelURL, tunnelCfg.userInfo)
 	if err != nil {
 		log.Printf("[ERROR] %+v\n", err)
 	}

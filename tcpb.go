@@ -24,13 +24,19 @@ type Bridge struct {
 }
 
 // TCP2WS tcp client -> websocket tunnel
-func (b *Bridge) TCP2WS(src net.Conn, wsURL string) error {
+func (b *Bridge) TCP2WS(src net.Conn, wsURL string, userInfo HTTPUserInfo) error {
 	wsDialer := &websocket.Dialer{
 		Proxy:            b.WSProxyGetter,
 		HandshakeTimeout: websocket.DefaultDialer.HandshakeTimeout,
 	}
 
-	wsCon, _, err := wsDialer.Dial(wsURL, nil)
+	var wsHeader http.Header
+	if userInfo != nil {
+		wsHeader = make(http.Header)
+		wsHeader.Set(userInfo.HeaderKey(), userInfo.HeaderValue())
+	}
+
+	wsCon, _, err := wsDialer.Dial(wsURL, wsHeader)
 	if err != nil {
 		return errors.Wrapf(err, "dial ws %s failed", wsURL)
 	}
