@@ -132,7 +132,12 @@ func handleConnection(c net.Conn, tunnelCfg clientTunnelCfg) {
 		WSProxyGetter: getWSProxy(tunnelCfg.proxyURL),
 		HeartInterval: time.Duration(tunnelCfg.heartbeatInterval) * time.Second,
 	}
-	err := bridge.TCP2WS(c, tunnelCfg.tunnelURL, tunnelCfg.userInfo)
+	var userInfo tcpb.HTTPUserInfo
+	if tunnelCfg.userInfo != nil {
+		userInfo = tunnelCfg.userInfo
+	}
+
+	err := bridge.TCP2WS(c, tunnelCfg.tunnelURL, userInfo)
 	if err != nil {
 		log.Printf("[ERROR] %+v\n", err)
 	}
