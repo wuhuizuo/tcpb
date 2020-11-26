@@ -59,8 +59,7 @@ jobs:
         uses: actions/checkout@v2
       - name: Build
         run: |
-          GOOS=${{ matrix.GOOS }} GOARCH=${{ matrix.GOARCH }} go build -o tcpbc.${{ matrix.GOOS }}.${{ matrix.GOARCH }}${{ matrix.EXT }} -v ./cmd/client
-          GOOS=${{ matrix.GOOS }} GOARCH=${{ matrix.GOARCH }} go build -o tcpbs.${{ matrix.GOOS }}.${{ matrix.GOARCH }}${{ matrix.EXT }} -v ./cmd/server      
+          GOOS=${{ matrix.GOOS }} GOARCH=${{ matrix.GOARCH }} make TARGET_CLIENT=tcpbc.${{ matrix.GOOS }}.${{ matrix.GOARCH }}${{ matrix.EXT }} TARGET_SERVER=tcpbs.${{ matrix.GOOS }}.${{ matrix.GOARCH }}${{ matrix.EXT }}      
       - name: Upload Release Asset tcpbc
         id: upload-release-asset-tcpbc
         uses: actions/upload-release-asset@v1

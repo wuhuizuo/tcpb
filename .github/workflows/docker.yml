@@ -18,7 +18,6 @@ jobs:
         run: |
           DOCKER_IMAGE=wuhuizuo/tcpb
           VERSION=edge
-          DOCKER_PLATFORMS=
           if [[ $GITHUB_REF == refs/tags/* ]]; then
             VERSION=${GITHUB_REF#refs/tags/v}
           fi

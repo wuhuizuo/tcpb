@@ -37,7 +37,6 @@ jobs:
       uses: actions/checkout@v2
     - name: Test
       run: GOOS=${{ matrix.GOOS }} GOARCH=${{ matrix.GOARCH }} go test -v .
-    - name: Build Client
-      run: GOOS=${{ matrix.GOOS }} GOARCH=${{ matrix.GOARCH }} go build -o tcpbc-${{ matrix.GOOS }}-${{ matrix.GOARCH }} -v ./cmd/client
-    - name: Build Server
-      run: GOOS=${{ matrix.GOOS }} GOARCH=${{ matrix.GOARCH }} go build -o tcpbs-${GOOS}-${GOARCH} -v ./cmd/server
+    - name: Build
+      run: |
+        GOOS=${{ matrix.GOOS }} GOARCH=${{ matrix.GOARCH }} make TARGET_CLIENT=tcpbc.${{ matrix.GOOS }}.${{ matrix.GOARCH }}${{ matrix.EXT }} TARGET_SERVER=tcpbs.${{ matrix.GOOS }}.${{ matrix.GOARCH }}${{ matrix.EXT }}      
