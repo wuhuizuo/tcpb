@@ -16,10 +16,16 @@ import (
 	"github.com/wuhuizuo/tcpb"
 )
 
-// 代理类型
+// proxy types
 const (
 	proxyNone = "noProxy"
 	proxyEnv  = "env"
+)
+
+// release version info
+var (
+	version   string = "unknown"
+	buildDate string = "unknown"
 )
 
 type (
@@ -41,19 +47,7 @@ type (
 )
 
 func main() {
-	var config clientCfg
-	flag.StringVar(&config.listenHost, "host", "", "The ip to bind on, default all")
-	flag.UintVar(&config.listenPort, "port", 0, "The port to listen on, default automatically chosen.")
-	flag.UintVar(&config.heartbeatInterval, "heartbeat", 30, "The interval(second) for heartbeat sending to tunnel server.")
-	flag.StringVar(&config.tunnelURL, "tunnel", "", "tunnel url, format: ws://host:port")
-	flag.StringVar(&config.proxyURL, "proxy", "", "proxy url, format: http[s]://host:port/path, default use system proxy.")
-
-	var userInfo tcpb.HTTPBasicUserInfo
-	flag.StringVar(&userInfo.Username, "user", "", "tunnel user name.")
-	flag.StringVar(&userInfo.Password, "password", "", "tunnel password.")
-
-	flag.Usage = usage
-	flag.Parse()
+	config := parseCmdArgs()
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -64,26 +58,59 @@ func main() {
 		cancel()
 	}()
 
+	if err := serve(ctx, config); err != nil {
+		log.Printf("[ERROR] failed to serve:+%v\n", err)
+		os.Exit(1)
+	}
+}
+
+func parseCmdArgs() clientCfg {
+	var config clientCfg
+	flag.StringVar(&config.listenHost, "host", "", "The ip to bind on, default all")
+	flag.UintVar(&config.listenPort, "port", 0, "The port to listen on, default automatically chosen.")
+	flag.UintVar(&config.heartbeatInterval, "heartbeat", 30, "The interval(second) for heartbeat sending to tunnel server.")
+	flag.StringVar(&config.tunnelURL, "tunnel", "", "tunnel url, format: ws://host:port")
+	flag.StringVar(&config.proxyURL, "proxy", "", "proxy url, format: http[s]://host:port/path, default use system proxy.")
+
+	tunnelAuthUsername := flag.String("user", "", "tunnel user name.")
+	tunnelAuthPassword := flag.String("password", "", "tunnel password.")
+	showVersion := flag.Bool("version", false, "prints current version")
+	flag.Usage = usage
+
+	flag.Parse()
+
+	if showVersion != nil {
+		printVersion()
+		os.Exit(0)
+	}
+
 	// detect user:password info in tunnelURL
 	u, err := url.ParseRequestURI(config.tunnelURL)
 	if err != nil {
 		log.Printf("[ERROR] invalid tunnel url: %s\n", config.tunnelURL)
 		os.Exit(2)
 	}
+
+	// user,password set in url.
 	if u.User != nil {
-		userInfo.Username = u.User.Username()
-		userInfo.Password, _ = u.User.Password()
+		password, _ := u.User.Password()
+		config.userInfo = &tcpb.HTTPBasicUserInfo{
+			Username: u.User.Username(),
+			Password: password,
+		}
 	}
 
-	// set user info if username given
-	if userInfo.Username != "" {
-		config.userInfo = &userInfo
+	// user,password set in cmd args.
+	if tunnelAuthUsername != nil {
+		config.userInfo = &tcpb.HTTPBasicUserInfo{
+			Username: *tunnelAuthUsername,
+		}
+		if tunnelAuthPassword != nil {
+			config.userInfo.Password = *tunnelAuthPassword
+		}
 	}
 
-	if err := serve(ctx, config); err != nil {
-		log.Printf("[ERROR] failed to serve:+%v\n", err)
-		os.Exit(1)
-	}
+	return config
 }
 
 func serve(ctx context.Context, cfg clientCfg) error {
@@ -141,6 +168,11 @@ func handleConnection(c net.Conn, tunnelCfg clientTunnelCfg) {
 	if err != nil {
 		log.Printf("[ERROR] %+v\n", err)
 	}
+}
+
+func printVersion() {
+	fmt.Fprintln(os.Stdout, "Version:\t", version)
+	fmt.Fprintln(os.Stdout, "Build date:\t", buildDate)
 }
 
 func usage() {

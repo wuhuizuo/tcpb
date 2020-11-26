@@ -12,6 +12,12 @@ import (
 	"github.com/wuhuizuo/tcpb"
 )
 
+// release version info
+var (
+	version   string
+	buildDate string
+)
+
 type (
 	httpHandlerFunc func(w http.ResponseWriter, r *http.Request)
 
@@ -22,6 +28,41 @@ type (
 		keyFile  string
 	}
 )
+
+func main() {
+	var cfg serverCfg
+
+	flag.StringVar(&cfg.host, "host", "", "The ip to bind on, default all")
+	flag.UintVar(&cfg.port, "port", 8080, "The port to listen on")
+	flag.StringVar(&cfg.certFile, "tlscert", "", "TLS cert file path")
+	flag.StringVar(&cfg.keyFile, "tlskey", "", "TLS key file path")
+	showVersion := flag.Bool("version", false, "prints current version")
+	flag.Usage = usage
+
+	flag.Parse()
+
+	if showVersion != nil {
+		printVersion()
+		os.Exit(0)
+	}
+
+	if err := serve(cfg); err != nil {
+		log.Fatalf("[ERROR] %+v\n", err)
+	}
+}
+
+func serve(cfg serverCfg) error {
+	http.HandleFunc("/", relayHandler(nil))
+	serveAddr := fmt.Sprintf("%s:%d", cfg.host, cfg.port)
+
+	if cfg.certFile == "" || cfg.keyFile == "" {
+		log.Printf("[INFO ] Listening on ws://%s\n", serveAddr)
+		return http.ListenAndServe(serveAddr, nil)
+	}
+
+	log.Printf("[INFO ] Listening on wss://%s\n", serveAddr)
+	return http.ListenAndServeTLS(serveAddr, cfg.certFile, cfg.keyFile, nil)
+}
 
 func relayHandler(upgrader *websocket.Upgrader) httpHandlerFunc {
 	if upgrader == nil {
@@ -60,32 +101,9 @@ func usage() {
 	flag.PrintDefaults()
 }
 
-func main() {
-	var cfg serverCfg
-
-	flag.StringVar(&cfg.host, "host", "", "The ip to bind on, default all")
-	flag.UintVar(&cfg.port, "port", 8080, "The port to listen on")
-	flag.StringVar(&cfg.certFile, "tlscert", "", "TLS cert file path")
-	flag.StringVar(&cfg.keyFile, "tlskey", "", "TLS key file path")
-	flag.Usage = usage
-	flag.Parse()
-
-	if err := serve(cfg); err != nil {
-		log.Fatalf("[ERROR] %+v\n", err)
-	}
-}
-
-func serve(cfg serverCfg) error {
-	http.HandleFunc("/", relayHandler(nil))
-	serveAddr := fmt.Sprintf("%s:%d", cfg.host, cfg.port)
-
-	if cfg.certFile == "" || cfg.keyFile == "" {
-		log.Printf("[INFO ] Listening on ws://%s\n", serveAddr)
-		return http.ListenAndServe(serveAddr, nil)
-	}
-
-	log.Printf("[INFO ] Listening on wss://%s\n", serveAddr)
-	return http.ListenAndServeTLS(serveAddr, cfg.certFile, cfg.keyFile, nil)
+func printVersion() {
+	fmt.Fprintln(os.Stdout, "Version:\t", version)
+	fmt.Fprintln(os.Stdout, "Build date:\t", buildDate)
 }
 
 func init() {
