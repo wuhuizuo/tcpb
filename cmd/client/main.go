@@ -79,7 +79,7 @@ func parseCmdArgs() clientCfg {
 
 	flag.Parse()
 
-	if showVersion != nil {
+	if showVersion != nil && *showVersion {
 		printVersion()
 		os.Exit(0)
 	}
