@@ -62,6 +62,9 @@ func main() {
 		log.Printf("[ERROR] failed to serve:+%v\n", err)
 		os.Exit(1)
 	}
+
+	log.Println("[WARN ] exit normally.")
+	os.Exit(0)
 }
 
 func parseCmdArgs() clientCfg {
@@ -142,10 +145,11 @@ func serve(ctx context.Context, cfg clientCfg) error {
 	}()
 
 	if err = l.Close(); err != nil {
-		return errors.Wrap(err, "server Shutdown Failed")
+		log.Printf("[ERROR] %s\n", err)
+		return errors.Wrap(err, "server shutdown failed.")
 	}
 
-	log.Println("[INFO ] TCP tunnel stopped")
+	log.Println("[INFO ] TCP tunnel stopped.")
 	return nil
 }
 
