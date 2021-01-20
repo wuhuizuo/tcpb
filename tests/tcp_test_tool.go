@@ -91,7 +91,7 @@ func serverAcceptHandler(c net.Conn) error {
 		}
 		if strings.TrimSpace(string(netData)) == "STOP" {
 			log.Println("Exiting TCP server!")
-			return nil
+			c.Write([]byte("Good bye.\n"))
 		}
 
 		log.Print("<< ", string(netData))
