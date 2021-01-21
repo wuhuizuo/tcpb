@@ -155,7 +155,7 @@ func serve(ctx context.Context, cfg clientCfg) error {
 
 func handleConnection(c net.Conn, tunnelCfg clientTunnelCfg) {
 	defer func() {
-		log.Println("[INFO ] close client connection")
+		log.Printf("[WARN ] close client tcp connection: %s -> %s \n", c.LocalAddr(), c.RemoteAddr())
 		c.Close()
 	}()
 
