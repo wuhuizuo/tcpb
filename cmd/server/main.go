@@ -81,7 +81,7 @@ func relayHandler(upgrader *websocket.Upgrader) httpHandlerFunc {
 		log.Println("[INFO ] receive tunnel request for tcp: ", tcpAddress)
 		wsCon, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.Printf("[ERROR] %s\n", err)
+			log.Printf("[ERROR] %v\n", err)
 			return
 		}
 		defer func() {
@@ -91,7 +91,7 @@ func relayHandler(upgrader *websocket.Upgrader) httpHandlerFunc {
 
 		bridge := tcpb.Bridge{}
 		if err := bridge.WS2TCP(wsCon, tcpAddress); err != nil {
-			log.Printf("[ERROR] %s\n", err)
+			log.Printf("[ERROR] %v\n", err)
 		}
 	}
 }

@@ -14,12 +14,15 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/wuhuizuo/tcpb"
+	"github.com/wuhuizuo/tcpb/proxy"
 )
 
 // proxy types
 const (
 	proxyNone = "noProxy"
 	proxyEnv  = "env"
+
+	errCodeArgInvalid = -2
 )
 
 // release version info
@@ -28,27 +31,12 @@ var (
 	buildDate string = "unknown"
 )
 
-type (
-	proxyGetter func(*http.Request) (*url.URL, error)
-
-	clientTunnelCfg struct {
-		tunnelURL         string
-		proxyURL          string
-		heartbeatInterval uint
-		userInfo          *tcpb.HTTPBasicUserInfo
-	}
-
-	clientCfg struct {
-		clientTunnelCfg
-
-		listenHost string
-		listenPort uint
-	}
-)
-
 func main() {
-	config := parseCmdArgs()
-
+	config, err := parseCmdArgs()
+	if err != nil {
+		log.Printf("[ERROR] %s", err)
+		os.Exit(errCodeArgInvalid)
+	}
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -58,7 +46,7 @@ func main() {
 		cancel()
 	}()
 
-	if err := serve(ctx, config); err != nil {
+	if err := serve(ctx, *config); err != nil {
 		log.Printf("[ERROR] failed to serve:+%v\n", err)
 		os.Exit(1)
 	}
@@ -67,16 +55,15 @@ func main() {
 	os.Exit(0)
 }
 
-func parseCmdArgs() clientCfg {
+func parseCmdArgs() (*clientCfg, error) {
 	var config clientCfg
 	flag.StringVar(&config.listenHost, "host", "", "The ip to bind on, default all")
 	flag.UintVar(&config.listenPort, "port", 0, "The port to listen on, default automatically chosen.")
 	flag.UintVar(&config.heartbeatInterval, "heartbeat", 30, "The interval(second) for heartbeat sending to tunnel server.")
-	flag.StringVar(&config.tunnelURL, "tunnel", "", "tunnel url, format: ws://host:port")
-	flag.StringVar(&config.proxyURL, "proxy", "", "proxy url, format: http[s]://host:port/path, default use system proxy.")
+	flag.StringVar(&config.tunnelURL, "tunnel", "", "tunnel url, format: (ws|http|https)://[user:name@]host:port[/path]")
+	flag.StringVar(&config.proxyURL, "proxy", "", "proxy url, format: http[s]://[user:name@]host:port[/path], default use system proxy.")
+	flag.StringVar(&config.httpMethod, "method", http.MethodPost, "http proxy method: POST|CONNECT, only for http/https tunnel url")
 
-	tunnelAuthUsername := flag.String("user", "", "tunnel user name.")
-	tunnelAuthPassword := flag.String("password", "", "tunnel password.")
 	showVersion := flag.Bool("version", false, "prints current version")
 	flag.Usage = usage
 
@@ -87,38 +74,15 @@ func parseCmdArgs() clientCfg {
 		os.Exit(0)
 	}
 
-	// detect user:password info in tunnelURL
-	u, err := url.ParseRequestURI(config.tunnelURL)
-	if err != nil {
-		log.Printf("[ERROR] invalid tunnel url: %s\n", config.tunnelURL)
-		os.Exit(2)
-	}
-
-	// user,password set in url.
-	if u.User != nil {
-		password, _ := u.User.Password()
-		config.userInfo = &tcpb.HTTPBasicUserInfo{
-			Username: u.User.Username(),
-			Password: password,
-		}
-	}
-
-	// user,password set in cmd args.
-	if tunnelAuthUsername != nil {
-		config.userInfo = &tcpb.HTTPBasicUserInfo{
-			Username: *tunnelAuthUsername,
-		}
-		if tunnelAuthPassword != nil {
-			config.userInfo.Password = *tunnelAuthPassword
-		}
-	}
-
-	return config
+	return &config, nil
 }
 
 func serve(ctx context.Context, cfg clientCfg) error {
-	serveAddr := fmt.Sprintf("%s:%d", cfg.listenHost, cfg.listenPort)
-	l, err := net.Listen("tcp", serveAddr)
+	if err := registryProxy(cfg); err != nil {
+		return errors.WithStack(err)
+	}
+
+	l, err := net.Listen("tcp", net.JoinHostPort(cfg.listenHost, fmt.Sprint(cfg.listenPort)))
 	if err != nil {
 		return err
 	}
@@ -153,6 +117,22 @@ func serve(ctx context.Context, cfg clientCfg) error {
 	return nil
 }
 
+// registry tcp proxy on http dialer.
+func registryProxy(cfg clientCfg) error {
+	tunnelURI, err := url.Parse(cfg.tunnelURL)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	proxyCfg := proxy.DefaultConfig(tunnelURI)
+	proxyCfg.HTTPMethod = cfg.httpMethod
+	proxyCfg.WSHeartInterval = time.Duration(cfg.heartbeatInterval) * time.Second
+
+	proxy.RegisterProxyDialer(proxyCfg)
+
+	return nil
+}
+
 func handleConnection(c net.Conn, tunnelCfg clientTunnelCfg) {
 	defer func() {
 		log.Printf("[WARN ] close client tcp connection: %s -> %s \n", c.LocalAddr(), c.RemoteAddr())
@@ -163,12 +143,8 @@ func handleConnection(c net.Conn, tunnelCfg clientTunnelCfg) {
 		WSProxyGetter: getWSProxy(tunnelCfg.proxyURL),
 		HeartInterval: time.Duration(tunnelCfg.heartbeatInterval) * time.Second,
 	}
-	var userInfo tcpb.HTTPUserInfo
-	if tunnelCfg.userInfo != nil {
-		userInfo = tunnelCfg.userInfo
-	}
 
-	err := bridge.TCP2WS(c, tunnelCfg.tunnelURL, userInfo)
+	err := bridge.TCP2Proxy(c, tunnelCfg.tunnelURL)
 	if err != nil {
 		log.Printf("[ERROR] %+v\n", err)
 	}
