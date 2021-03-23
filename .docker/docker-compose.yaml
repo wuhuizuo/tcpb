@@ -1,0 +1,50 @@
+version: "3.7"
+
+services:
+  tcpserver:
+    image: golang:latest
+    command:
+      - go
+      - run
+      - /test_tool/main.go
+      - --server
+      - --addr
+      - :1000
+    networks:
+      - intranet
+    volumes:
+      - test-tool:/test_tool/
+  envoy:
+    depends_on:
+      - tcpserver
+    image: envoyproxy/envoy-dev:latest
+    command:
+      - /usr/local/bin/envoy
+      - -c /etc/envoy/envoy_post.yaml
+      # - -c /etc/envoy/envoy_connect.yaml
+      - -l trace
+      - --log-path /tmp/envoy_info.log
+
+    volumes:
+      - envoy-cfg:/etc/envoy/
+    networks:
+      - intranet
+    ports:
+      - "10000:10000" # terminate
+      - "20000:20000" # encapsulate
+networks:
+  intranet: {}
+
+volumes:
+  test-tool:
+    driver: local
+    driver_opts:
+      o: bind
+      type: none
+      device: ./cmd/test-tool
+  envoy-cfg:
+    driver: local
+    driver_opts:
+      o: bind
+      type: none
+      device: .docker

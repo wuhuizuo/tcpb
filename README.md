@@ -1,76 +1,54 @@
 # TCPB
 
-TCP Bridge under websocket protocol.
+TCP Bridge under HTTP protocol.
 
-> implmented with go websocket [gorilla/websocket](https://github.com/gorilla/websocket)
+> websocket tunnel side/client implmented with go websocket [gorilla/websocket](https://github.com/gorilla/websocket)
+> http connect/post tunnel server directly using envoy, only implmented tunnel client in my repo.
 
 ## Usage
 
-run in tunnel server:
+### start up tcp server and envoy tunnel server side
 
 ```bash
-./server -port 4223
-
-# using docker
-docker run wuhuizuo/tcpb -v <host_port>:80
+docker-compose -f .docker/docker-compose.yml up -d
 ```
 
-run in user client side:
+### start tunnel client side
 
 ```bash
-./client -tunnel ws://{tunnel server ip}:4223/{remote_tcp_ip}:{remote_tcp_port} -port {local_port}
+# tunnel remote tcp to local port 10001
+
+# http post tunnel, using config in docker-compose.yaml: /etc/envoy/envoy_post.yaml
+go run ./cmd/client/ --tunnel=http://127.0.0.1:10000 -port 10001 --method=POST
+
+# http connect tunnel, using config in docker-compose.yaml: /etc/envoy/envoy_connect.yaml
+# go run ./cmd/client/ --tunnel=http://127.0.0.1:10000 -port 10001
 ```
 
+### test with tcp client
 
-
-## test
-
-run a tcp server on remote server on :
+test envoy encapsulate tcp server：
 
 ```bash
-./tcp_server.py
+# type STOP to exist.
+go run ./cmd/test-tool --addr 127.0.0.1:20000
 ```
 
-file `tcp_server.py`, as remote `{remote_tcp_port}` is `65432`:
-
-```python
-#! /usr/bin/env python3
-# a simple tcp server
-import socket,os
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.bind(('0.0.0.0', 65432))
-sock.listen(5)
-while True:
-    connection,address = sock.accept()
-    print("accept connection from:", address)
-    buf = connection.recv(1024)
-    print(buf)
-    connection.send(buf)
-    connection.close()
-
-```
-
-test tunnel with tcp client:
+test with tunnel client function:
 
 ```bash
-./tcp_client.py
+# type STOP to exist.
+go run ./cmd/test-tool --addr 127.0.0.1:10001
 ```
 
-file `tcp_server.py`, as tunneled `{local_port}` is `65431`:
+test websocket client/side:
 
-```python
-#!/usr/bin/env python3
+```bash
+# terminal 1
+go run ./cmd/server/ -port 30000
+# terminal 2
+go run ./cmd/client/ --tunnel=ws://127.0.0.1:30000/127.0.0.1:20000 -port 10001
+# terminal 3
+go run ./cmd/test-tool --addr 127.0.0.1:10001
 
-import socket
-
-HOST = '127.0.0.1'  # The server's hostname or IP address
-PORT = 65432        # The port used by the server
-
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.connect((HOST, PORT))
-    s.sendall(b'Hello, world')
-    print("send ok")
-    data = s.recv(1024)
-
-print('Received', repr(data))
 ```
