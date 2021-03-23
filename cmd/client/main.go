@@ -144,7 +144,7 @@ func handleConnection(c net.Conn, tunnelCfg clientTunnelCfg) {
 		HeartInterval: time.Duration(tunnelCfg.heartbeatInterval) * time.Second,
 	}
 
-	err := bridge.TCP2Proxy(c, tunnelCfg.tunnelURL)
+	err := bridge.TCP2Tunnel(c, tunnelCfg.tunnelURL)
 	if err != nil {
 		log.Printf("[ERROR] %+v\n", err)
 	}

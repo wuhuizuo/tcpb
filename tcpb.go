@@ -27,8 +27,8 @@ type Bridge struct {
 	HeartInterval time.Duration
 }
 
-// TCP2Proxy tcp client -> tcp proxy tunnel(http/https/http2.0 or socket5).
-func (b *Bridge) TCP2Proxy(src net.Conn, proxyURL string) error {
+// TCP2Tunnel tcp client -> tcp tunnel server(http/https/http2.0 or socket5).
+func (b *Bridge) TCP2Tunnel(src net.Conn, proxyURL string) error {
 	if strings.HasPrefix(proxyURL, "ws://") || strings.HasPrefix(proxyURL, "wss://") {
 		return b.TCP2WS(src, proxyURL)
 	}
@@ -68,29 +68,6 @@ func (b *Bridge) WS2TCP(src *websocket.Conn, tcpAddress string) error {
 	return syncConn(tcpCon, ws.NewWSConn(src, b.HeartInterval))
 }
 
-func syncConn(a, b net.Conn) (err error) {
-	errCh1 := make(chan error)
-	errCh2 := make(chan error)
-
-	go func() {
-		_, err := io.Copy(a, b)
-		errCh1 <- err
-	}()
-	go func() {
-		_, err := io.Copy(b, a)
-		errCh2 <- err
-	}()
-
-	select {
-	case err = <-errCh1:
-		log.Printf("[WARN ] disconnected: tcp://%s -> tcp://%s %+v\n", a.LocalAddr(), b.RemoteAddr(), err)
-	case err = <-errCh2:
-		log.Printf("[WARN ] disconnected: tcp://%s -> tcp://%s %+v\n", b.LocalAddr(), a.RemoteAddr(), err)
-	}
-
-	return err
-}
-
 // TCP2WS tcp client -> websocket tunnel
 func (b *Bridge) TCP2WS(src net.Conn, wsURL string) error {
 	wsDialer := &websocket.Dialer{
@@ -118,4 +95,27 @@ func (b *Bridge) TCP2WS(src net.Conn, wsURL string) error {
 	defer wsCon.Close()
 
 	return ws.SyncConn(wsCon, src, b.HeartInterval)
+}
+
+func syncConn(a, b net.Conn) (err error) {
+	errCh1 := make(chan error)
+	errCh2 := make(chan error)
+
+	go func() {
+		_, err := io.Copy(a, b)
+		errCh1 <- err
+	}()
+	go func() {
+		_, err := io.Copy(b, a)
+		errCh2 <- err
+	}()
+
+	select {
+	case err = <-errCh1:
+		log.Printf("[WARN ] disconnected: tcp://%s -> tcp://%s %+v\n", a.LocalAddr(), b.RemoteAddr(), err)
+	case err = <-errCh2:
+		log.Printf("[WARN ] disconnected: tcp://%s -> tcp://%s %+v\n", b.LocalAddr(), a.RemoteAddr(), err)
+	}
+
+	return err
 }
