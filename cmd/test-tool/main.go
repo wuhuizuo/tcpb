@@ -22,9 +22,15 @@ func main() {
 	}
 
 	if *isServerPtr {
-		server(*address)
+		err := server(*address)
+		if err != nil {
+			log.Fatalln(err)
+		}
 	} else {
-		client(*address)
+		err := client(*address)
+		if err != nil {
+			log.Fatalln(err)
+		}
 	}
 }
 
@@ -33,11 +39,10 @@ func usage() {
 	flag.PrintDefaults()
 }
 
-func client(address string) {
+func client(address string) error {
 	c, err := net.Dial("tcp", address)
 	if err != nil {
-		log.Println(err)
-		return
+		return err
 	}
 	defer c.Close()
 
@@ -45,22 +50,28 @@ func client(address string) {
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Print(">> ")
 		text, _ := reader.ReadString('\n')
-		fmt.Fprintf(c, text+"\n")
+		if _, err := fmt.Fprintf(c, text+"\n"); err != nil {
+			return err
+		}
 
-		message, _ := bufio.NewReader(c).ReadString('\n')
+		message, err := bufio.NewReader(c).ReadString('\n')
+		if err != nil {
+			return err
+		}
 		log.Print("<< " + message)
 		if strings.TrimSpace(string(text)) == "STOP" {
 			log.Println("TCP client exiting...")
 			break
 		}
 	}
+
+	return nil
 }
 
-func server(address string) {
+func server(address string) error {
 	l, err := net.Listen("tcp", address)
 	if err != nil {
-		log.Println(err)
-		return
+		return err
 	}
 	defer l.Close()
 
@@ -69,11 +80,10 @@ func server(address string) {
 	for {
 		c, err := l.Accept()
 		if err != nil {
-			log.Println(err)
-			return
+			return err
 		}
-		log.Println("accect incoming connection from: ", c.RemoteAddr())
 
+		log.Println("accepted incoming connection from: ", c.RemoteAddr())
 		go serverAcceptHandler(c)
 	}
 }
