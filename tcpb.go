@@ -86,9 +86,10 @@ func (b *Bridge) TCP2WS(src net.Conn, wsURL string) error {
 		basicAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte(user.String()))
 		wsHeader = make(http.Header)
 		wsHeader.Set("Authorization", basicAuth)
+		u.User = nil
 	}
 
-	wsCon, _, err := wsDialer.Dial(wsURL, wsHeader)
+	wsCon, _, err := wsDialer.Dial(u.String(), wsHeader)
 	if err != nil {
 		return errors.Wrapf(err, "dial ws %s failed", wsURL)
 	}
